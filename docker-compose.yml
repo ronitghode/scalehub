@@ -1,0 +1,95 @@
+version: '3.8'
+
+services:
+  # --- Frontend ---
+  client:
+    build: ./client
+    container_name: scalehub-client
+    ports:
+      - "3000:5173" # Vite default port mapped to host 3000
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000 # Browser accesses Gateway via localhost
+    depends_on:
+      - api-gateway
+    networks:
+      - scalehub-network
+
+  # --- API Gateway ---
+  api-gateway:
+    build: ./services/api-gateway
+    container_name: scalehub-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - AUTH_SERVICE_URL=http://auth-service:5000
+      - USER_SERVICE_URL=http://user-service:5002
+      - COMMUNICATION_SERVICE_URL=http://communication-service:5003
+    depends_on:
+      - auth-service
+    networks:
+      - scalehub-network
+
+  # --- User Service ---
+  user-service:
+    build: ./services/user-service
+    container_name: user-service
+    ports:
+      - "5002:5002"
+    environment:
+      - PORT=5002
+      - MONGO_URI=mongodb://mongo:27017/user-db
+      - JWT_SECRET=supersecretkey
+    depends_on:
+      - mongo
+    networks:
+      - scalehub-network
+
+  # --- Communication Service ---
+  communication-service:
+    build: ./services/communication-service
+    container_name: communication-service
+    ports:
+      - "5003:5003"
+    environment:
+      - PORT=5003
+      - JWT_SECRET=supersecretkey
+    networks:
+      - scalehub-network
+
+  # --- Auth Service ---
+  auth-service:
+    build: ./services/auth-service
+    container_name: auth-service
+    ports:
+      - "5001:5000"
+    environment:
+      - PORT=5000
+      - MONGO_URI=mongodb://mongo:27017/auth-db
+      - JWT_SECRET=supersecretkey
+      - JWT_REFRESH_SECRET=supersecretrefreshkey
+    depends_on:
+      - mongo
+    networks:
+      - scalehub-network
+
+  # --- Database ---
+  mongo:
+    image: mongo:latest
+    container_name: scalehub-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - scalehub-network
+
+networks:
+  scalehub-network:
+    driver: bridge
+
+volumes:
+  mongo-data:
